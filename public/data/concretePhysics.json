@@ -1,0 +1,90 @@
+{
+  "b7.5": {
+    "densityKgM3": 2100,
+    "elasticityGPa": 20,
+    "fractureSensitivity": 1.25,
+    "fragmentCount": 18,
+    "velocityFactor": 1.25,
+    "internalColor": 12632234
+  },
+  "b10": {
+    "densityKgM3": 2140,
+    "elasticityGPa": 22,
+    "fractureSensitivity": 1.22,
+    "fragmentCount": 20,
+    "velocityFactor": 1.2,
+    "internalColor": 12366338
+  },
+  "b12.5": {
+    "densityKgM3": 2180,
+    "elasticityGPa": 24,
+    "fractureSensitivity": 1.2,
+    "fragmentCount": 22,
+    "velocityFactor": 1.15,
+    "internalColor": 11826158
+  },
+  "b15": {
+    "densityKgM3": 2220,
+    "elasticityGPa": 26,
+    "fractureSensitivity": 1.18,
+    "fragmentCount": 24,
+    "velocityFactor": 1.1,
+    "internalColor": 11301179
+  },
+  "b20": {
+    "densityKgM3": 2260,
+    "elasticityGPa": 28,
+    "fractureSensitivity": 1.15,
+    "fragmentCount": 26,
+    "velocityFactor": 1.0,
+    "internalColor": 10576147
+  },
+  "b22.5": {
+    "densityKgM3": 2300,
+    "elasticityGPa": 30,
+    "fractureSensitivity": 1.13,
+    "fragmentCount": 28,
+    "velocityFactor": 0.95,
+    "internalColor": 10027228
+  },
+  "b25": {
+    "densityKgM3": 2340,
+    "elasticityGPa": 32,
+    "fractureSensitivity": 1.1,
+    "fragmentCount": 30,
+    "velocityFactor": 0.9,
+    "internalColor": 9335301
+  },
+  "b27.5": {
+    "densityKgM3": 2370,
+    "elasticityGPa": 34,
+    "fractureSensitivity": 1.08,
+    "fragmentCount": 32,
+    "velocityFactor": 0.86,
+    "internalColor": 8668462
+  },
+  "b30": {
+    "densityKgM3": 2400,
+    "elasticityGPa": 36,
+    "fractureSensitivity": 1.06,
+    "fragmentCount": 34,
+    "velocityFactor": 0.82,
+    "internalColor": 8169097
+  },
+  "b35": {
+    "densityKgM3": 2430,
+    "elasticityGPa": 38,
+    "fractureSensitivity": 1.04,
+    "fragmentCount": 36,
+    "velocityFactor": 0.78,
+    "internalColor": 7694400
+  },
+  "b40": {
+    "densityKgM3": 2460,
+    "elasticityGPa": 40,
+    "fractureSensitivity": 1.02,
+    "fragmentCount": 38,
+    "velocityFactor": 0.74,
+    "internalColor": 7252220
+  }
+}
