@@ -7,6 +7,7 @@ import MapModule from './components/MapModule';
 import MixSelector from './components/MixSelector';
 import ComparatorModule from './components/ComparatorModule';
 import WhatIfModule from './components/WhatIfModule';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { concreteClasses, getConcreteById } from './data/concreteData';
 
 const App: React.FC = () => {
@@ -34,12 +35,14 @@ const App: React.FC = () => {
 
   return (
     <div className={`${theme === 'dark' ? 'dark' : ''} min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-[#06132e] text-slate-900 dark:text-slate-100`}>
-      <Header
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        theme={theme}
-        onThemeToggle={() => setTheme(prev => (prev === 'light' ? 'dark' : 'light'))}
-      />
+      <ErrorBoundary componentName="Шапка">
+        <Header
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          theme={theme}
+          onThemeToggle={() => setTheme(prev => (prev === 'light' ? 'dark' : 'light'))}
+        />
+      </ErrorBoundary>
 
       <main className="container mx-auto px-6 py-8">
         <AnimatePresence mode="wait">
@@ -58,11 +61,13 @@ const App: React.FC = () => {
                   Выберите класс бетона для просмотра характеристик и проведения виртуального испытания.
                   Нажмите кнопку «Показать детали» на выбранной карточке — она откроется внутри карточки и сдвинет другие вниз.
                 </p>
-                <CatalogSection
-                  concreteClasses={concreteClasses}
-                  selectedId={selectedClassId}
-                  onSelect={handleSelectConcrete}
-                />
+                <ErrorBoundary componentName="Каталог бетона">
+                  <CatalogSection
+                    concreteClasses={concreteClasses}
+                    selectedId={selectedClassId}
+                    onSelect={handleSelectConcrete}
+                  />
+                </ErrorBoundary>
               </div>
 
               {/* Панель симуляции */}
@@ -72,12 +77,12 @@ const App: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="grid grid-cols-1 lg:grid-cols-2 gap-6"
                 >
-                  <div>
-                    <SimulationPanel selectedClass={selectedClass} />
-                  </div>
-                  <div className="space-y-6">
+                  <ErrorBoundary componentName="Панель симуляции">
+                    <SimulationPanel key={selectedClass.id} selectedClass={selectedClass} />
+                  </ErrorBoundary>
+                  <ErrorBoundary componentName="What-If модуль">
                     <WhatIfModule selectedClass={selectedClass} />
-                  </div>
+                  </ErrorBoundary>
                 </motion.div>
               )}
 
@@ -92,7 +97,9 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <MapModule selectedClass={selectedClass} />
+              <ErrorBoundary componentName="Карта применения">
+                <MapModule selectedClass={selectedClass} />
+              </ErrorBoundary>
             </motion.div>
           )}
 
@@ -104,7 +111,9 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <MixSelector />
+              <ErrorBoundary componentName="Подбор смеси">
+                <MixSelector />
+              </ErrorBoundary>
             </motion.div>
           )}
 
@@ -116,7 +125,9 @@ const App: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
-              <ComparatorModule selectedClass={selectedClass} />
+              <ErrorBoundary componentName="Компаратор">
+                <ComparatorModule selectedClass={selectedClass} />
+              </ErrorBoundary>
             </motion.div>
           )}
         </AnimatePresence>
