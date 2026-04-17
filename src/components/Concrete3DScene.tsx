@@ -16,7 +16,7 @@ const GROUND_LEVEL = -0.75;
 const BLOCK_SIZE = 1.4;
 const BLOCK_OFFSET_X = 0;
 
-const MAX_FRAGMENTS = 36; // ограничение для производительности и более спокойной сцены
+const MAX_FRAGMENTS = 82; // больше кусков для постепенного разрушения без визуального "взрыва"
 
 const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
   sceneKey,
@@ -41,6 +41,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
   const fragmentMassRef = useRef<number[]>([]);
   const fragmentInvMassRef = useRef<number[]>([]);
   const fragmentRadiusRef = useRef<number[]>([]);
+  const spallStageRef = useRef(0);
   const animationIdRef = useRef<number | null>(null);
 
   useEffect(() => { statusRef.current = testStatus; }, [testStatus]);
@@ -65,6 +66,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     fragmentMassRef.current = [];
     fragmentInvMassRef.current = [];
     fragmentRadiusRef.current = [];
+    spallStageRef.current = 0;
     cracksRef.current = [];
 
     // === СЦЕНА ===
@@ -209,10 +211,10 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     const elasticityGPa = physics.elasticityGPa;
 
     // Создаём приземистые каменные фрагменты без острых "шипов".
-    const createIrregularFragmentGeometry = (): THREE.BufferGeometry => {
+    const createIrregularFragmentGeometry = (sizeMultiplier = 1): THREE.BufferGeometry => {
       const kind = Math.random();
       if (kind < 0.5) {
-        const radius = 0.1 + Math.random() * 0.16;
+        const radius = (0.1 + Math.random() * 0.16) * sizeMultiplier;
         const detail = 1;
         const geo = new THREE.IcosahedronGeometry(radius, detail);
         const pos = geo.getAttribute('position') as THREE.BufferAttribute;
@@ -233,9 +235,9 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       }
 
       if (kind < 0.82) {
-        const sx = 0.12 + Math.random() * 0.22;
-        const sy = 0.08 + Math.random() * 0.16;
-        const sz = 0.12 + Math.random() * 0.22;
+        const sx = (0.12 + Math.random() * 0.22) * sizeMultiplier;
+        const sy = (0.08 + Math.random() * 0.16) * sizeMultiplier;
+        const sz = (0.12 + Math.random() * 0.22) * sizeMultiplier;
         const geo = new THREE.BoxGeometry(sx, sy, sz, 3, 2, 3);
         const pos = geo.getAttribute('position') as THREE.BufferAttribute;
         const v = new THREE.Vector3();
@@ -252,7 +254,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         return geo;
       }
 
-      const radius = 0.08 + Math.random() * 0.12;
+      const radius = (0.08 + Math.random() * 0.12) * sizeMultiplier;
       const geo = new THREE.DodecahedronGeometry(radius, 0);
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
       const v = new THREE.Vector3();
@@ -267,6 +269,85 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       geo.computeVertexNormals();
       geo.computeBoundingSphere();
       return geo;
+    };
+
+    const createConcreteFragment = (
+      position: THREE.Vector3,
+      velocity: THREE.Vector3,
+      sizeMultiplier = 1,
+      angularSpeed = 0.02,
+    ) => {
+      const currentScene = sceneRef.current;
+      if (!currentScene || fragmentsRef.current.length >= MAX_FRAGMENTS) return;
+
+      const geo = createIrregularFragmentGeometry(sizeMultiplier);
+      const baseColor = new THREE.Color(blockColor).lerp(new THREE.Color(0x8a8780), 0.55);
+      const colorVariation = (Math.random() - 0.5) * 0.07;
+      const fragMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(
+          Math.max(0, Math.min(1, baseColor.r + colorVariation)),
+          Math.max(0, Math.min(1, baseColor.g + colorVariation * 0.6)),
+          Math.max(0, Math.min(1, baseColor.b + colorVariation * 0.4)),
+        ),
+        flatShading: true,
+        roughness: 0.96,
+        metalness: 0,
+      });
+
+      const frag = new THREE.Mesh(geo, fragMat);
+      frag.castShadow = true;
+      frag.receiveShadow = true;
+      frag.position.copy(position);
+      frag.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      frag.geometry.computeBoundingSphere();
+
+      currentScene.add(frag);
+      fragmentsRef.current.push(frag);
+
+      const radius = frag.geometry.boundingSphere ? frag.geometry.boundingSphere.radius : 0.15;
+      fragmentRadiusRef.current.push(radius);
+      const mass = Math.max(0.08, Math.pow(radius, 3) * 4);
+      fragmentMassRef.current.push(mass);
+      fragmentInvMassRef.current.push(1 / mass);
+      fragmentVelocitiesRef.current.push(velocity);
+      fragmentAngularVelocitiesRef.current.push(
+        new THREE.Vector3(
+          (Math.random() - 0.5) * angularSpeed,
+          (Math.random() - 0.5) * angularSpeed,
+          (Math.random() - 0.5) * angularSpeed,
+        ),
+      );
+    };
+
+    const createEdgeSpall = (progress: number) => {
+      const half = BLOCK_SIZE / 2;
+      const side = Math.floor(Math.random() * 4);
+      const edgeBias = Math.random() > 0.45;
+      const y = blockY + (Math.random() - 0.42) * BLOCK_SIZE * 0.86;
+      let x = BLOCK_OFFSET_X + (Math.random() - 0.5) * BLOCK_SIZE;
+      let z = (Math.random() - 0.5) * BLOCK_SIZE;
+      const velocity = new THREE.Vector3(0, 0.008 + Math.random() * 0.012, 0);
+
+      if (side === 0) {
+        x = BLOCK_OFFSET_X + half + 0.02;
+        z = edgeBias ? (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : z;
+        velocity.x = 0.012 + Math.random() * 0.018;
+      } else if (side === 1) {
+        x = BLOCK_OFFSET_X - half - 0.02;
+        z = edgeBias ? (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : z;
+        velocity.x = -0.012 - Math.random() * 0.018;
+      } else if (side === 2) {
+        z = half + 0.02;
+        x = edgeBias ? BLOCK_OFFSET_X + (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : x;
+        velocity.z = 0.012 + Math.random() * 0.018;
+      } else {
+        z = -half - 0.02;
+        x = edgeBias ? BLOCK_OFFSET_X + (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : x;
+        velocity.z = -0.012 - Math.random() * 0.018;
+      }
+
+      const size = 0.42 + progress * 0.45 + Math.random() * 0.16;
+      createConcreteFragment(new THREE.Vector3(x, y, z), velocity, size, 0.018);
     };
 
     // Функция для выставления теней
@@ -293,23 +374,28 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
 
       // Сжатие блока
       if (statusRef.current !== 'idle' && !brokenRef.current) {
-        const stiffness = Math.max(0.7, Math.min(1.3, elasticityGPa / 30));
-        const maxSquash = 0.9;
-        const squash = Math.max(maxSquash, 1 - progress * 0.1 / stiffness);
-        block.scale.y = squash;
-        block.position.y = GROUND_LEVEL + (BLOCK_SIZE * squash) / 2;
-        block.scale.x = 1 + progress * 0.02;
-        block.scale.z = 1 + progress * 0.02;
+        block.scale.set(1, 1, 1);
+        block.position.y = blockY;
 
-        if (progress > 0.6) {
-          const crackIntensity = (progress - 0.6) / 0.39;
+        if (progress > 0.28) {
+          const crackIntensity = Math.min(1, (progress - 0.28) / 0.71);
           crackLines.forEach((c) => {
             const mat = c.material as THREE.LineBasicMaterial;
             mat.opacity = Math.min(0.92, crackIntensity * 1.4);
           });
-          const tremor = crackIntensity > 0.4 ? (Math.random() - 0.5) * 0.01 : 0;
+          const tremor = crackIntensity > 0.65 ? (Math.random() - 0.5) * 0.004 : 0;
           block.rotation.x = tremor;
           block.rotation.z = -tremor;
+        }
+
+        const spallThresholds = [0.42, 0.55, 0.68, 0.8, 0.9, 0.96];
+        while (spallStageRef.current < spallThresholds.length && progress >= spallThresholds[spallStageRef.current]) {
+          const stage = spallStageRef.current;
+          const chips = 3 + stage;
+          for (let i = 0; i < chips; i++) {
+            createEdgeSpall(progress);
+          }
+          spallStageRef.current += 1;
         }
 
         if (progress > 0.99) {
@@ -330,58 +416,23 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         block.visible = false;
         crackLines.forEach((c) => scene.remove(c));
 
-        const fragmentCount = Math.max(physics.fragmentCount, 18);
-        const baseColor = new THREE.Color(blockColor).lerp(new THREE.Color(0x8a8780), 0.55);
+        const fragmentCount = Math.max(physics.fragmentCount + 34, 54);
         const currentScene = sceneRef.current;
         if (!currentScene) return;
 
-        const count = Math.min(fragmentCount, MAX_FRAGMENTS);
+        const count = Math.min(fragmentCount, MAX_FRAGMENTS - fragmentsRef.current.length);
         for (let i = 0; i < count; i++) {
-          const geo = createIrregularFragmentGeometry();
-
-          const colorVariation = (Math.random() - 0.5) * 0.07;
-          const fragMat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(
-              Math.max(0, Math.min(1, baseColor.r + colorVariation)),
-              Math.max(0, Math.min(1, baseColor.g + colorVariation * 0.6)),
-              Math.max(0, Math.min(1, baseColor.b + colorVariation * 0.4)),
-            ),
-            flatShading: true,
-            roughness: 0.96,
-            metalness: 0,
-          });
-
-          const frag = new THREE.Mesh(geo, fragMat);
-          frag.castShadow = true;
-          frag.receiveShadow = true;
-
-          // положение в пределах блока
-          frag.position.set(
+          const position = new THREE.Vector3(
             BLOCK_OFFSET_X + (Math.random() - 0.5) * BLOCK_SIZE * 0.8,
             GROUND_LEVEL + BLOCK_SIZE * 0.2 + Math.random() * BLOCK_SIZE * 0.6,
             (Math.random() - 0.5) * BLOCK_SIZE * 0.8,
           );
-          frag.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-          frag.geometry.computeBoundingSphere();
-
-          currentScene.add(frag);
-          fragmentsRef.current.push(frag);
-
-          // Физические параметры
-          const radius = (frag.geometry.boundingSphere ? frag.geometry.boundingSphere.radius : 0.15);
-          fragmentRadiusRef.current.push(radius);
-          const mass = Math.max(0.08, Math.pow(radius, 3) * 4); // масса ~ объём
-          fragmentMassRef.current.push(mass);
-          fragmentInvMassRef.current.push(1 / mass);
-
-          // Короткий развал вместо взрыва: куски падают рядом с блоком и быстро останавливаются.
           const speed = 0.012 + Math.random() * 0.028;
-          fragmentVelocitiesRef.current.push(
+          createConcreteFragment(
+            position,
             new THREE.Vector3((Math.random() - 0.5) * speed, 0.012 + Math.random() * 0.026, (Math.random() - 0.5) * speed),
-          );
-
-          fragmentAngularVelocitiesRef.current.push(
-            new THREE.Vector3((Math.random() - 0.5) * 0.025, (Math.random() - 0.5) * 0.025, (Math.random() - 0.5) * 0.025),
+            0.62 + Math.random() * 0.55,
+            0.024,
           );
         }
 
