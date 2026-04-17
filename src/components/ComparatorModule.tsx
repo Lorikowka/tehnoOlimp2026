@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { concreteClasses, getConcreteById, everydayForces, ConcreteClass } from '../data/concreteData';
+import { everydayForces, ConcreteClass } from '../data/concreteData';
 
 interface ComparatorModuleProps {
   selectedClass: ConcreteClass | null;
@@ -8,20 +8,10 @@ interface ComparatorModuleProps {
 
 const ComparatorModule: React.FC<ComparatorModuleProps> = ({ selectedClass }) => {
   const [forceObjects, setForceObjects] = useState<string[]>([]);
-  const [totalForce, setTotalForce] = useState(0);
 
   const handleToggleForce = (forceId: string) => {
     setForceObjects(prev => {
       const exists = prev.includes(forceId);
-      const force = everydayForces.find(f => f.id === forceId);
-      if (!force) return prev;
-
-      const newTotal = exists
-        ? totalForce - force.force
-        : totalForce + force.force;
-
-      setTotalForce(newTotal);
-
       return exists
         ? prev.filter(id => id !== forceId)
         : [...prev, forceId];
@@ -30,8 +20,12 @@ const ComparatorModule: React.FC<ComparatorModuleProps> = ({ selectedClass }) =>
 
   const handleReset = () => {
     setForceObjects([]);
-    setTotalForce(0);
   };
+
+  const totalForce = forceObjects.reduce((sum, id) => {
+    const force = everydayForces.find(item => item.id === id);
+    return sum + (force?.force || 0);
+  }, 0);
 
   // Расчет давления в МПа (площадь 10x10 см = 0.01 м2)
   const area = 0.01;

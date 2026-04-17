@@ -303,8 +303,8 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         block.scale.x = 1 + progress * 0.02;
         block.scale.z = 1 + progress * 0.02;
 
-        if (progress > 0.45) {
-          const crackIntensity = (progress - 0.45) / 0.55;
+        if (progress > 0.6) {
+          const crackIntensity = (progress - 0.6) / 0.39;
           crackLines.forEach((c) => {
             const mat = c.material as THREE.LineBasicMaterial;
             mat.opacity = Math.min(0.92, crackIntensity * 1.4);
@@ -314,8 +314,8 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           block.rotation.z = -tremor;
         }
 
-        if (progress > 0.85) {
-          const damageFactor = (progress - 0.85) / 0.15;
+        if (progress > 0.99) {
+          const damageFactor = (progress - 0.99) / 0.01;
           const bc = new THREE.Color(blockColor);
           (block.material as THREE.MeshStandardMaterial).color.setRGB(
             Math.min(1, bc.r + damageFactor * 0.12),
@@ -326,7 +326,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       }
 
       // Разрушение: создаём фрагменты и задаём им физику
-      const fractureThreshold = strengthTarget * 0.96;
+      const fractureThreshold = strengthTarget;
       if (!brokenRef.current && load >= fractureThreshold && statusRef.current !== 'idle') {
         brokenRef.current = true;
         block.visible = false;

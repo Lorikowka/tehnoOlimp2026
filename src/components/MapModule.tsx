@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { YMaps, Map, Placemark, Clusterer } from '@pbe/react-yandex-maps';
 import { motion } from 'framer-motion';
 import { mapObjects, concreteClasses, ConcreteClass } from '../data/concreteData';
@@ -11,9 +11,22 @@ const MapModule: React.FC<MapModuleProps> = ({ selectedClass }) => {
   const [filterClass, setFilterClass] = useState<string | null>(null);
   const [selectedObject, setSelectedObject] = useState<typeof mapObjects[0] | null>(null);
 
-  const filteredObjects = filterClass && filterClass !== 'all'
-    ? mapObjects.filter(obj => obj.concreteClass === filterClass)
+  const availableClassIds = Array.from(new Set(mapObjects.map(item => item.concreteClass)));
+  const filterableClasses = concreteClasses.filter(item => availableClassIds.includes(item.id));
+
+  useEffect(() => {
+    setFilterClass(selectedClass?.id || null);
+  }, [selectedClass?.id]);
+
+  const filteredObjects = filterClass
+    ? mapObjects.filter(item => item.concreteClass === filterClass)
     : mapObjects;
+
+  useEffect(() => {
+    if (selectedObject && !filteredObjects.some(item => item.id === selectedObject.id)) {
+      setSelectedObject(null);
+    }
+  }, [filteredObjects, selectedObject]);
 
   const mapState = {
     center: [59.9343, 30.3351],
@@ -34,12 +47,11 @@ const MapModule: React.FC<MapModuleProps> = ({ selectedClass }) => {
       <div className="p-4 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-slate-900 dark:to-blue-900 text-white">
         <h2 className="text-xl font-bold mb-1">Карта применения бетона в Санкт-Петербурге</h2>
         <p className="text-sm text-blue-100">
-          Реальные объекты, построенные с использованием различных классов бетона
+          Объекты на карте синхронизируются с выбранным классом бетона и помогают быстро увидеть реальные примеры применения.
         </p>
       </div>
 
-      {/* Фильтр */}
-      <div className="p-4 bg-gray-50/60 border-b border-gray-200/50">
+      <div className="p-4 bg-gray-50/60 border-b border-gray-200/50 dark:bg-slate-950/60 dark:border-slate-700/60">
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterClass(null)}
@@ -51,59 +63,59 @@ const MapModule: React.FC<MapModuleProps> = ({ selectedClass }) => {
           >
             Все объекты
           </button>
-          {concreteClasses.slice(5, 13).map(c => (
+          {filterableClasses.map(item => (
             <button
-              key={c.id}
-              onClick={() => setFilterClass(c.id)}
+              key={item.id}
+              onClick={() => setFilterClass(item.id)}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                filterClass === c.id
+                filterClass === item.id
                   ? 'bg-blue-500 text-white'
                   : 'bg-white/80 dark:bg-slate-800/80 text-gray-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 border border-gray-200/50 dark:border-slate-700/50'
               }`}
             >
-              {c.label}
+              {item.label}
             </button>
           ))}
         </div>
+        {selectedClass && (
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+            Активный класс из каталога: <span className="font-semibold text-blue-700 dark:text-blue-400">{selectedClass.label}</span>
+          </p>
+        )}
       </div>
 
-      {/* Карта */}
       <YMaps>
         <div className="w-full h-[500px]">
-          <Map
-            defaultState={mapState}
-            width="100%"
-            height="100%"
-          >
+          <Map defaultState={mapState} width="100%" height="100%">
             <Clusterer
               options={{
                 preset: 'islands#invertedBlueClusterIcons',
                 clusterDisableClickZoom: true,
               }}
             >
-              {filteredObjects.map(obj => (
+              {filteredObjects.map(item => (
                 <Placemark
-                  key={obj.id}
-                  geometry={obj.coordinates}
+                  key={item.id}
+                  geometry={item.coordinates}
                   properties={{
-                    balloonContentHeader: obj.name,
+                    balloonContentHeader: item.name,
                     balloonContentBody: `
-                      <div style="padding: 8px; font-family: Inter, sans-serif; color: #1f2937;">
-                        <p style="font-weight: bold; margin-bottom: 4px;">Класс бетона: ${obj.concreteClass.toUpperCase()}</p>
-                        <p style="font-size: 13px; margin: 0 0 4px 0;">${obj.description}</p>
-                        <p style="font-size: 11px; color: #4b5563; margin-top: 8px;">Тип: ${typeLabels[obj.type] || obj.type}</p>
-                        <p style="font-size: 11px; color: #6b7280; margin-top: 4px;">Минск 📍 Санкт-Петербург</p>
+                      <div style="padding: 8px; font-family: sans-serif; color: #1f2937;">
+                        <p style="font-weight: bold; margin-bottom: 4px;">Класс бетона: ${item.concreteClass.toUpperCase()}</p>
+                        <p style="font-size: 13px; margin: 0 0 4px 0;">${item.description}</p>
+                        <p style="font-size: 11px; color: #4b5563; margin-top: 8px;">Тип: ${typeLabels[item.type] || item.type}</p>
+                        <p style="font-size: 11px; color: #6b7280; margin-top: 4px;">Локация: Санкт-Петербург</p>
                       </div>
                     `,
-                    hintContent: `${obj.name} — ${obj.concreteClass.toUpperCase()}`,
-                    iconContent: obj.concreteClass.toUpperCase(),
+                    hintContent: `${item.name} — ${item.concreteClass.toUpperCase()}`,
+                    iconContent: item.concreteClass.toUpperCase(),
                   }}
                   options={{
                     preset: 'islands#blueStretchyIcon',
                     iconColor: '#1d4ed8',
                     balloonPanelMaxMapArea: 0,
                   }}
-                  onClick={() => setSelectedObject(obj)}
+                  onClick={() => setSelectedObject(item)}
                 />
               ))}
             </Clusterer>
@@ -111,32 +123,30 @@ const MapModule: React.FC<MapModuleProps> = ({ selectedClass }) => {
         </div>
       </YMaps>
 
-      {/* Информация о выбранном объекте */}
       {selectedObject && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="p-4 bg-gray-50/60 dark:bg-slate-950/80 border-t border-gray-200/50 dark:border-slate-700/60"
         >
-          <h3 className="text-lg font-bold text-gray-800 mb-2">{selectedObject.name}</h3>
-          <p className="text-gray-600 text-sm mb-3">{selectedObject.description}</p>
+          <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100 mb-2">{selectedObject.name}</h3>
+          <p className="text-gray-600 dark:text-slate-300 text-sm mb-3">{selectedObject.description}</p>
           <div className="flex flex-wrap gap-3">
-            <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-sm font-semibold">
+            <span className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-lg text-sm font-semibold">
               Бетон: {selectedObject.concreteClass.toUpperCase()}
             </span>
-            <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-semibold border border-gray-200/50">
+            <span className="bg-gray-100 dark:bg-slate-800/70 text-gray-700 dark:text-slate-200 px-3 py-1 rounded-lg text-sm font-semibold border border-gray-200/50 dark:border-slate-700/50">
               Тип: {typeLabels[selectedObject.type] || selectedObject.type}
             </span>
           </div>
         </motion.div>
       )}
 
-      {/* Легенда */}
       <div className="p-4 bg-gray-50/60 dark:bg-slate-950/80 border-t border-gray-200/50 dark:border-slate-700/60">
-        <h4 className="font-semibold text-gray-700 mb-2 text-sm">Легенда карты</h4>
+        <h4 className="font-semibold text-gray-700 dark:text-slate-100 mb-2 text-sm">Легенда карты</h4>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
           {Object.entries(typeLabels).map(([key, label]) => (
-            <div key={key} className="flex items-center gap-2 text-gray-600">
+            <div key={key} className="flex items-center gap-2 text-gray-600 dark:text-slate-300">
               <div className="w-2 h-2 bg-blue-500 rounded-full" />
               <span>{label}</span>
             </div>

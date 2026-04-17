@@ -43,9 +43,9 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
     let step = 0;
     timerRef.current = setInterval(() => {
       step++;
-      const newLoad = increment * step;
+      const newLoad = Math.min(increment * step, maxLoad);
       setCurrentLoadMPa(newLoad);
-      setLoadProgress((newLoad / maxLoad) * 100);
+      setLoadProgress(Math.min((newLoad / maxLoad) * 100, 100));
 
       if (step >= steps) {
         if (timerRef.current) {
