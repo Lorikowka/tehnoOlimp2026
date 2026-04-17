@@ -244,62 +244,26 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
 
     const strengthTarget = selectedClass?.strengthMPa || 40;
 
-    // Создаём приземистые каменные фрагменты без острых "шипов".
+    // Создаём сглаженные каменные фрагменты без острых "шипов" и рваной полигональности.
     const createIrregularFragmentGeometry = (sizeMultiplier = 1): THREE.BufferGeometry => {
       const kind = Math.random();
-      if (kind < 0.5) {
-        const radius = (0.1 + Math.random() * 0.16) * sizeMultiplier;
-        const detail = 1;
-        const geo = new THREE.IcosahedronGeometry(radius, detail);
-        const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-        const v = new THREE.Vector3();
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i);
-          const noise = 0.82 + Math.random() * 0.32;
-          v.multiplyScalar(noise);
-          v.x *= 0.85 + Math.random() * 0.28;
-          v.y *= 0.75 + Math.random() * 0.22;
-          v.z *= 0.85 + Math.random() * 0.28;
-          pos.setXYZ(i, v.x, v.y, v.z);
-        }
-        pos.needsUpdate = true;
-        geo.computeVertexNormals();
-        geo.computeBoundingSphere();
-        return geo;
-      }
-
-      if (kind < 0.82) {
-        const sx = (0.12 + Math.random() * 0.22) * sizeMultiplier;
-        const sy = (0.08 + Math.random() * 0.16) * sizeMultiplier;
-        const sz = (0.12 + Math.random() * 0.22) * sizeMultiplier;
-        const geo = new THREE.BoxGeometry(sx, sy, sz, 3, 2, 3);
-        const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-        const v = new THREE.Vector3();
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i);
-          v.x += (Math.random() - 0.5) * 0.035;
-          v.y += (Math.random() - 0.5) * 0.025;
-          v.z += (Math.random() - 0.5) * 0.035;
-          pos.setXYZ(i, v.x, v.y, v.z);
-        }
-        pos.needsUpdate = true;
-        geo.computeVertexNormals();
-        geo.computeBoundingSphere();
-        return geo;
-      }
-
-      const radius = (0.08 + Math.random() * 0.12) * sizeMultiplier;
-      const geo = new THREE.DodecahedronGeometry(radius, 0);
+      const radius = (0.09 + Math.random() * 0.15) * sizeMultiplier;
+      const geo = kind < 0.62
+        ? new THREE.SphereGeometry(radius, 10, 8)
+        : new THREE.IcosahedronGeometry(radius, 2);
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
       const v = new THREE.Vector3();
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i);
-        v.x *= 0.95 + Math.random() * 0.22;
-        v.y *= 0.72 + Math.random() * 0.2;
-        v.z *= 0.95 + Math.random() * 0.22;
+        const surfaceNoise = 0.94 + Math.random() * 0.12;
+        v.multiplyScalar(surfaceNoise);
+        v.x *= 0.92 + Math.random() * 0.18;
+        v.y *= 0.72 + Math.random() * 0.22;
+        v.z *= 0.92 + Math.random() * 0.18;
         pos.setXYZ(i, v.x, v.y, v.z);
       }
       pos.needsUpdate = true;
+      geo.deleteAttribute('normal');
       geo.computeVertexNormals();
       geo.computeBoundingSphere();
       return geo;
@@ -309,7 +273,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       position: THREE.Vector3,
       velocity: THREE.Vector3,
       sizeMultiplier = 1,
-      angularSpeed = 0.02,
+      angularSpeed = 0.003,
     ) => {
       const currentScene = sceneRef.current;
       if (!currentScene || fragmentsRef.current.length >= MAX_FRAGMENTS) return;
@@ -323,8 +287,8 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           Math.max(0, Math.min(1, baseColor.g + colorVariation * 0.6)),
           Math.max(0, Math.min(1, baseColor.b + colorVariation * 0.4)),
         ),
-        flatShading: true,
-        roughness: 0.96,
+        flatShading: false,
+        roughness: 0.98,
         metalness: 0,
       });
 
@@ -468,9 +432,11 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
 
           // интеграция позиций и вращения
           frag.position.add(vel);
-          frag.rotation.x += ang.x;
-          frag.rotation.y += ang.y;
-          frag.rotation.z += ang.z;
+          if (ang && ang.lengthSq() > 0.000001) {
+            frag.rotation.x += ang.x;
+            frag.rotation.y += ang.y;
+            frag.rotation.z += ang.z;
+          }
 
           // гравитация
           vel.y += gravity;
@@ -478,7 +444,12 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           // демпфинг
           vel.x *= 0.985;
           vel.z *= 0.985;
-          ang.multiplyScalar(0.94);
+          if (ang) {
+            ang.multiplyScalar(0.82);
+            if (ang.lengthSq() < 0.0000004) {
+              ang.set(0, 0, 0);
+            }
+          }
 
           // коллизия с полом
           const r = radii[i] || 0.12;
@@ -489,8 +460,8 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
             // трение: уменьшаем горизонтальную скорость
             vel.x *= globalFriction;
             vel.z *= globalFriction;
-            // небольшая ротация от удара
-            ang.multiplyScalar(0.45);
+            // Бетонные куски не должны крутиться на месте после касания пола.
+            if (ang) ang.set(0, 0, 0);
           }
         }
 
@@ -539,10 +510,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
               A.position.addScaledVector(correction, -invMa);
               B.position.addScaledVector(correction, invMb);
 
-              // небольшая обменная ротация
-              const rnd = (Math.random() - 0.5) * 0.12;
-              fragmentAngularVelocitiesRef.current[i].x += rnd * invMa;
-              fragmentAngularVelocitiesRef.current[j].x -= rnd * invMb;
+              // Коллизии не добавляют заметного вращения, чтобы фрагменты не крутились на месте.
             }
           }
         }
