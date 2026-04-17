@@ -16,7 +16,7 @@ const GROUND_LEVEL = -0.75;
 const BLOCK_SIZE = 1.4;
 const BLOCK_OFFSET_X = 0;
 
-const MAX_FRAGMENTS = 60; // ограничение для производительности
+const MAX_FRAGMENTS = 36; // ограничение для производительности и более спокойной сцены
 
 const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
   sceneKey,
@@ -208,60 +208,22 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     const strengthTarget = selectedClass?.strengthMPa || 40;
     const elasticityGPa = physics.elasticityGPa;
 
-    // Создаём разнообразные геометрии осколков
+    // Создаём приземистые каменные фрагменты без острых "шипов".
     const createIrregularFragmentGeometry = (): THREE.BufferGeometry => {
-      // выбираем один из нескольких типов
       const kind = Math.random();
-      if (kind < 0.33) {
-        const radius = 0.06 + Math.random() * 0.26;
-        const detail = Math.random() > 0.65 ? 1 : 0;
+      if (kind < 0.5) {
+        const radius = 0.1 + Math.random() * 0.16;
+        const detail = 1;
         const geo = new THREE.IcosahedronGeometry(radius, detail);
         const pos = geo.getAttribute('position') as THREE.BufferAttribute;
         const v = new THREE.Vector3();
         for (let i = 0; i < pos.count; i++) {
           v.fromBufferAttribute(pos, i);
-          const noise = 0.7 + Math.random() * 1.0;
+          const noise = 0.82 + Math.random() * 0.32;
           v.multiplyScalar(noise);
-          v.x *= 0.8 + Math.random() * 0.6;
-          v.y *= 0.6 + Math.random() * 1.0;
-          v.z *= 0.8 + Math.random() * 0.6;
-          pos.setXYZ(i, v.x, v.y, v.z);
-        }
-        pos.needsUpdate = true;
-        geo.computeVertexNormals();
-        geo.computeBoundingSphere();
-        return geo;
-      } else if (kind < 0.66) {
-        // параллелепипед с неровностями
-        const sx = 0.08 + Math.random() * 0.3;
-        const sy = 0.05 + Math.random() * 0.28;
-        const sz = 0.06 + Math.random() * 0.28;
-        const geo = new THREE.BoxGeometry(sx, sy, sz, 2, 2, 2);
-        const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-        const v = new THREE.Vector3();
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i);
-          v.x += (Math.random() - 0.5) * 0.06;
-          v.y += (Math.random() - 0.5) * 0.06;
-          v.z += (Math.random() - 0.5) * 0.06;
-          pos.setXYZ(i, v.x, v.y, v.z);
-        }
-        pos.needsUpdate = true;
-        geo.computeVertexNormals();
-        geo.computeBoundingSphere();
-        return geo;
-      } else {
-        // усеченная пирамида-полушар
-        const segments = 6 + Math.floor(Math.random() * 6);
-        const radius = 0.06 + Math.random() * 0.25;
-        const geo = new THREE.CylinderGeometry(0.001, radius, 0.08 + Math.random() * 0.32, segments);
-        const pos = geo.getAttribute('position') as THREE.BufferAttribute;
-        const v = new THREE.Vector3();
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i);
-          v.x *= 0.7 + Math.random() * 0.7;
-          v.y *= 0.6 + Math.random() * 1.0;
-          v.z *= 0.7 + Math.random() * 0.7;
+          v.x *= 0.85 + Math.random() * 0.28;
+          v.y *= 0.75 + Math.random() * 0.22;
+          v.z *= 0.85 + Math.random() * 0.28;
           pos.setXYZ(i, v.x, v.y, v.z);
         }
         pos.needsUpdate = true;
@@ -269,6 +231,42 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         geo.computeBoundingSphere();
         return geo;
       }
+
+      if (kind < 0.82) {
+        const sx = 0.12 + Math.random() * 0.22;
+        const sy = 0.08 + Math.random() * 0.16;
+        const sz = 0.12 + Math.random() * 0.22;
+        const geo = new THREE.BoxGeometry(sx, sy, sz, 3, 2, 3);
+        const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i);
+          v.x += (Math.random() - 0.5) * 0.035;
+          v.y += (Math.random() - 0.5) * 0.025;
+          v.z += (Math.random() - 0.5) * 0.035;
+          pos.setXYZ(i, v.x, v.y, v.z);
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        geo.computeBoundingSphere();
+        return geo;
+      }
+
+      const radius = 0.08 + Math.random() * 0.12;
+      const geo = new THREE.DodecahedronGeometry(radius, 0);
+      const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        v.x *= 0.95 + Math.random() * 0.22;
+        v.y *= 0.72 + Math.random() * 0.2;
+        v.z *= 0.95 + Math.random() * 0.22;
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      geo.computeBoundingSphere();
+      return geo;
     };
 
     // Функция для выставления теней
@@ -284,9 +282,9 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
 
     // === ФИЗИКА ===
     // простая физика: интеграция скоростей, шаровые столкновения между фрагментами, сонаправленная реакция, коррекция проницаемости
-    const gravity = -0.0028; // настраиваемая гравитация
-    const globalRestitution = 0.28; // упругость столкновений
-    const globalFriction = 0.78; // трение при касании пола
+    const gravity = -0.0036; // настраиваемая гравитация
+    const globalRestitution = 0.12; // бетонные куски почти не подпрыгивают
+    const globalFriction = 0.55; // быстро гасим скольжение по полу
 
     // АНИМАЦИЯ
     const animate = () => {
@@ -332,8 +330,8 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         block.visible = false;
         crackLines.forEach((c) => scene.remove(c));
 
-        const fragmentCount = Math.max(physics.fragmentCount + 10, 24);
-        const baseColor = new THREE.Color(blockColor);
+        const fragmentCount = Math.max(physics.fragmentCount, 18);
+        const baseColor = new THREE.Color(blockColor).lerp(new THREE.Color(0x8a8780), 0.55);
         const currentScene = sceneRef.current;
         if (!currentScene) return;
 
@@ -341,15 +339,16 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
         for (let i = 0; i < count; i++) {
           const geo = createIrregularFragmentGeometry();
 
-          const colorVariation = (Math.random() - 0.5) * 0.12;
+          const colorVariation = (Math.random() - 0.5) * 0.07;
           const fragMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(
               Math.max(0, Math.min(1, baseColor.r + colorVariation)),
               Math.max(0, Math.min(1, baseColor.g + colorVariation * 0.6)),
               Math.max(0, Math.min(1, baseColor.b + colorVariation * 0.4)),
             ),
-            roughness: 0.86 + Math.random() * 0.16,
-            metalness: Math.random() * 0.06,
+            flatShading: true,
+            roughness: 0.96,
+            metalness: 0,
           });
 
           const frag = new THREE.Mesh(geo, fragMat);
@@ -371,18 +370,18 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           // Физические параметры
           const radius = (frag.geometry.boundingSphere ? frag.geometry.boundingSphere.radius : 0.15);
           fragmentRadiusRef.current.push(radius);
-          const mass = Math.max(0.02, Math.pow(radius, 3) * 1.5); // масса ~ объём
+          const mass = Math.max(0.08, Math.pow(radius, 3) * 4); // масса ~ объём
           fragmentMassRef.current.push(mass);
           fragmentInvMassRef.current.push(1 / mass);
 
-          // начальная скорость: более лёгкие куски улетают быстрее
-          const speed = (0.045 + Math.random() * 0.12) * (0.12 / mass);
+          // Короткий развал вместо взрыва: куски падают рядом с блоком и быстро останавливаются.
+          const speed = 0.012 + Math.random() * 0.028;
           fragmentVelocitiesRef.current.push(
-            new THREE.Vector3((Math.random() - 0.5) * speed, 0.03 + Math.random() * 0.08, (Math.random() - 0.5) * speed),
+            new THREE.Vector3((Math.random() - 0.5) * speed, 0.012 + Math.random() * 0.026, (Math.random() - 0.5) * speed),
           );
 
           fragmentAngularVelocitiesRef.current.push(
-            new THREE.Vector3((Math.random() - 0.5) * 0.18, (Math.random() - 0.5) * 0.18, (Math.random() - 0.5) * 0.18),
+            new THREE.Vector3((Math.random() - 0.5) * 0.025, (Math.random() - 0.5) * 0.025, (Math.random() - 0.5) * 0.025),
           );
         }
 
@@ -433,9 +432,9 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           vel.y += gravity;
 
           // демпфинг
-          vel.x *= 0.9975;
-          vel.z *= 0.9975;
-          ang.multiplyScalar(0.995);
+          vel.x *= 0.985;
+          vel.z *= 0.985;
+          ang.multiplyScalar(0.94);
 
           // коллизия с полом
           const r = radii[i] || 0.12;
@@ -447,8 +446,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
             vel.x *= globalFriction;
             vel.z *= globalFriction;
             // небольшая ротация от удара
-            ang.x += (Math.random() - 0.5) * 0.1;
-            ang.z += (Math.random() - 0.5) * 0.1;
+            ang.multiplyScalar(0.45);
           }
         }
 
