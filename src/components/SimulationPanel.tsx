@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ConcreteClass, concretePhysics } from '../data/concreteData';
 import Visualizer from './Visualizer';
-import ThreePinataScene from './ThreePinataScene';
+import Concrete3DScene from './Concrete3DScene';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface SimulationPanelProps {
   selectedClass: ConcreteClass | null;
@@ -16,12 +17,18 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
   const [loadProgress, setLoadProgress] = useState(0);
   const [showComparison, setShowComparison] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const physics = selectedClass ? concretePhysics[selectedClass.id] : undefined;
   const maxLoad = selectedClass?.strengthMPa || 0;
 
   const handleStartTest = () => {
     if (!selectedClass || testStatus === 'loading') return;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
     setTestStatus('loading');
     setShowComparison(false);
@@ -34,14 +41,17 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
     const increment = maxLoad / steps;
 
     let step = 0;
-    const timer = setInterval(() => {
+    timerRef.current = setInterval(() => {
       step++;
       const newLoad = increment * step;
       setCurrentLoadMPa(newLoad);
       setLoadProgress((newLoad / maxLoad) * 100);
 
       if (step >= steps) {
-        clearInterval(timer);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
         setTestStatus('destroyed');
         setShowComparison(true);
       }
@@ -49,12 +59,30 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
   };
 
   const handleReset = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setTestStatus('idle');
     setCurrentLoadMPa(0);
     setLoadProgress(0);
     setShowComparison(false);
     setSceneKey(prev => prev + 1);
   };
+
+  useEffect(() => {
+    handleReset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   if (!selectedClass) {
     return (
@@ -69,7 +97,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
   }
 
   return (
-    <div className="bg-white/70 dark:bg-slate-950/80 backdrop-blur-xl border border-white/40 dark:border-slate-700/70 rounded-xl p-6 space-y-5 shadow-lg">
+    <div className="relative z-0 bg-white/70 dark:bg-slate-950/80 backdrop-blur-xl border border-white/40 dark:border-slate-700/70 rounded-xl p-6 space-y-5 shadow-lg">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Виртуальное испытание</h2>
         <span className="bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-slate-100 px-3 py-1 rounded-lg text-sm font-semibold">
@@ -77,13 +105,16 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
         </span>
       </div>
 
-      <ThreePinataScene
-        key={`three-pinata-${selectedClass.label}-${sceneKey}`}
-        selectedClass={selectedClass}
-        testStatus={testStatus}
-        currentLoadMPa={currentLoadMPa}
-        maxLoadMPa={maxLoad}
-      />
+      <ErrorBoundary key={sceneKey} componentName="3D-симуляция">
+        <Concrete3DScene
+          key={sceneKey}
+          sceneKey={sceneKey}
+          selectedClass={selectedClass}
+          testStatus={testStatus}
+          currentLoadMPa={currentLoadMPa}
+          maxLoadMPa={maxLoad}
+        />
+      </ErrorBoundary>
 
       {/* Визуализатор */}
       <Visualizer
@@ -100,7 +131,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ selectedClass }) => {
       </div>
 
       {/* Кнопки управления */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <button
           onClick={handleStartTest}
           disabled={testStatus === 'loading'}
