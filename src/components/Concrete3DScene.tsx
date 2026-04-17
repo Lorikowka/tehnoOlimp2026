@@ -41,7 +41,6 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
   const fragmentMassRef = useRef<number[]>([]);
   const fragmentInvMassRef = useRef<number[]>([]);
   const fragmentRadiusRef = useRef<number[]>([]);
-  const spallStageRef = useRef(0);
   const animationIdRef = useRef<number | null>(null);
 
   useEffect(() => { statusRef.current = testStatus; }, [testStatus]);
@@ -66,7 +65,6 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     fragmentMassRef.current = [];
     fragmentInvMassRef.current = [];
     fragmentRadiusRef.current = [];
-    spallStageRef.current = 0;
     cracksRef.current = [];
 
     // === СЦЕНА ===
@@ -80,12 +78,13 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     // Камера
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
     const isMobile = width < 640;
+    const cameraTarget = new THREE.Vector3(BLOCK_OFFSET_X, blockY, 0);
     camera.position.set(
-      BLOCK_OFFSET_X + (isMobile ? 2.9 : 2.6),
-      blockY + (isMobile ? 1.8 : 1.5),
-      isMobile ? 3.4 : 3.0,
+      BLOCK_OFFSET_X + (isMobile ? 2.05 : 2.35),
+      blockY + (isMobile ? 1.35 : 1.45),
+      isMobile ? 3.1 : 3.05,
     );
-    camera.lookAt(BLOCK_OFFSET_X, blockY * 0.98, 0);
+    camera.lookAt(cameraTarget);
     cameraRef.current = camera;
 
     // Рендерер
@@ -104,7 +103,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     controls.dampingFactor = 0.05;
     controls.minDistance = isMobile ? 2.4 : 1.8;
     controls.maxDistance = isMobile ? 10 : 8;
-    controls.target.set(BLOCK_OFFSET_X, blockY * 0.98, 0);
+    controls.target.copy(cameraTarget);
     controls.update();
     controlsRef.current = controls;
 
@@ -162,42 +161,78 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     function createCracks(): THREE.LineSegments[] {
       const lines: THREE.LineSegments[] = [];
       const half = BLOCK_SIZE / 2;
-      const makePolyline = (start: THREE.Vector3, axisA: 'x' | 'z', axisB: 'x' | 'y' | 'z', depth = 0) => {
-        const points: THREE.Vector3[] = [start.clone()];
-        const segments = 3 + Math.floor(Math.random() * 4);
-        let cursor = start.clone();
-        for (let i = 0; i < segments; i++) {
-          cursor = cursor.clone();
-          cursor[axisA] += (Math.random() - 0.5) * 0.28;
-          cursor[axisB] += (Math.random() - 0.5) * 0.28;
-          if (depth !== 0) cursor.z = depth;
-          points.push(cursor);
-        }
-        return points;
-      };
 
-      for (let i = 0; i < 10; i++) {
-        const startX = BLOCK_OFFSET_X + (Math.random() - 0.5) * BLOCK_SIZE * 0.9;
-        const startY = blockY + (Math.random() - 0.5) * BLOCK_SIZE * 0.7;
-        const pts = makePolyline(new THREE.Vector3(startX, startY, half + 0.005), 'x', 'y', half + 0.005);
-        const geo = new THREE.BufferGeometry().setFromPoints(pts);
-        lines.push(new THREE.LineSegments(geo, crackMaterial.clone()));
-      }
+      const clampToFace = (value: number, padding = 0.04) => Math.max(-half + padding, Math.min(half - padding, value));
 
-      for (let i = 0; i < 6; i++) {
-        const startZ = (Math.random() - 0.5) * BLOCK_SIZE * 0.9;
-        const startY = blockY + (Math.random() - 0.5) * BLOCK_SIZE * 0.7;
-        const pts = makePolyline(new THREE.Vector3(BLOCK_OFFSET_X + half + 0.005, startY, startZ), 'z', 'y');
-        const geo = new THREE.BufferGeometry().setFromPoints(pts);
-        lines.push(new THREE.LineSegments(geo, crackMaterial.clone()));
-      }
-
-      for (let i = 0; i < 5; i++) {
-        const startX = BLOCK_OFFSET_X + (Math.random() - 0.5) * BLOCK_SIZE * 0.8;
-        const startZ = (Math.random() - 0.5) * BLOCK_SIZE * 0.8;
-        const points = makePolyline(new THREE.Vector3(startX, blockY + half + 0.005, startZ), 'x', 'z');
+      const addCrack = (points: THREE.Vector3[]) => {
         const geo = new THREE.BufferGeometry().setFromPoints(points);
         lines.push(new THREE.LineSegments(geo, crackMaterial.clone()));
+      };
+
+      const buildFaceCrack = (
+        face: 'front' | 'right' | 'top',
+        edge: 'left' | 'right' | 'top' | 'bottom',
+        length: number,
+      ) => {
+        const points: THREE.Vector3[] = [];
+        const segmentCount = 4 + Math.floor(Math.random() * 3);
+        const lateral = (Math.random() - 0.5) * 0.55;
+        const direction = edge === 'left' || edge === 'bottom' ? 1 : -1;
+
+        for (let i = 0; i <= segmentCount; i++) {
+          const t = i / segmentCount;
+          const main = -half + t * length;
+          const wander = Math.sin(t * Math.PI * (1.1 + Math.random() * 0.4)) * 0.08 + (Math.random() - 0.5) * 0.045;
+          let x = BLOCK_OFFSET_X;
+          let y = blockY;
+          let z = 0;
+
+          if (face === 'front') {
+            z = half + 0.007;
+            x = edge === 'left' || edge === 'right'
+              ? BLOCK_OFFSET_X + direction * half + direction * t * length
+              : BLOCK_OFFSET_X + clampToFace(lateral + wander);
+            y = edge === 'top' || edge === 'bottom'
+              ? blockY + direction * half + direction * t * length
+              : blockY + clampToFace(lateral + wander);
+            x = BLOCK_OFFSET_X + clampToFace(x - BLOCK_OFFSET_X);
+            y = blockY + clampToFace(y - blockY);
+          } else if (face === 'right') {
+            x = BLOCK_OFFSET_X + half + 0.007;
+            z = edge === 'left' || edge === 'right'
+              ? direction * half + direction * t * length
+              : clampToFace(lateral + wander);
+            y = edge === 'top' || edge === 'bottom'
+              ? blockY + direction * half + direction * t * length
+              : blockY + clampToFace(lateral + wander);
+            z = clampToFace(z);
+            y = blockY + clampToFace(y - blockY);
+          } else {
+            y = blockY + half + 0.007;
+            x = edge === 'left' || edge === 'right'
+              ? BLOCK_OFFSET_X + direction * half + direction * t * length
+              : BLOCK_OFFSET_X + clampToFace(lateral + wander);
+            z = edge === 'top' || edge === 'bottom'
+              ? direction * half + direction * t * length
+              : clampToFace(lateral + wander);
+            x = BLOCK_OFFSET_X + clampToFace(x - BLOCK_OFFSET_X);
+            z = clampToFace(z);
+          }
+
+          points.push(new THREE.Vector3(x, y, z));
+        }
+
+        addCrack(points);
+      };
+
+      const faces: Array<'front' | 'right' | 'top'> = ['front', 'right', 'top'];
+      const edges: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'];
+      for (let i = 0; i < 22; i++) {
+        buildFaceCrack(
+          faces[i % faces.length],
+          edges[Math.floor(Math.random() * edges.length)],
+          0.28 + Math.random() * 0.46,
+        );
       }
 
       return lines;
@@ -208,7 +243,6 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
     cracksRef.current = crackLines;
 
     const strengthTarget = selectedClass?.strengthMPa || 40;
-    const elasticityGPa = physics.elasticityGPa;
 
     // Создаём приземистые каменные фрагменты без острых "шипов".
     const createIrregularFragmentGeometry = (sizeMultiplier = 1): THREE.BufferGeometry => {
@@ -319,37 +353,6 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       );
     };
 
-    const createEdgeSpall = (progress: number) => {
-      const half = BLOCK_SIZE / 2;
-      const side = Math.floor(Math.random() * 4);
-      const edgeBias = Math.random() > 0.45;
-      const y = blockY + (Math.random() - 0.42) * BLOCK_SIZE * 0.86;
-      let x = BLOCK_OFFSET_X + (Math.random() - 0.5) * BLOCK_SIZE;
-      let z = (Math.random() - 0.5) * BLOCK_SIZE;
-      const velocity = new THREE.Vector3(0, 0.008 + Math.random() * 0.012, 0);
-
-      if (side === 0) {
-        x = BLOCK_OFFSET_X + half + 0.02;
-        z = edgeBias ? (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : z;
-        velocity.x = 0.012 + Math.random() * 0.018;
-      } else if (side === 1) {
-        x = BLOCK_OFFSET_X - half - 0.02;
-        z = edgeBias ? (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : z;
-        velocity.x = -0.012 - Math.random() * 0.018;
-      } else if (side === 2) {
-        z = half + 0.02;
-        x = edgeBias ? BLOCK_OFFSET_X + (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : x;
-        velocity.z = 0.012 + Math.random() * 0.018;
-      } else {
-        z = -half - 0.02;
-        x = edgeBias ? BLOCK_OFFSET_X + (Math.random() > 0.5 ? half : -half) + (Math.random() - 0.5) * 0.08 : x;
-        velocity.z = -0.012 - Math.random() * 0.018;
-      }
-
-      const size = 0.42 + progress * 0.45 + Math.random() * 0.16;
-      createConcreteFragment(new THREE.Vector3(x, y, z), velocity, size, 0.018);
-    };
-
     // Функция для выставления теней
     const enableShadowsOnNode = (node: THREE.Object3D) => {
       node.traverse((ch: any) => {
@@ -372,7 +375,7 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
       const load = loadRef.current;
       const progress = maxLoadMPa > 0 ? Math.min(load / maxLoadMPa, 1) : 0;
 
-      // Сжатие блока
+      // Блок сохраняет форму: под нагрузкой растут только трещины на гранях.
       if (statusRef.current !== 'idle' && !brokenRef.current) {
         block.scale.set(1, 1, 1);
         block.position.y = blockY;
@@ -386,16 +389,6 @@ const Concrete3DScene: React.FC<Concrete3DSceneProps> = ({
           const tremor = crackIntensity > 0.65 ? (Math.random() - 0.5) * 0.004 : 0;
           block.rotation.x = tremor;
           block.rotation.z = -tremor;
-        }
-
-        const spallThresholds = [0.42, 0.55, 0.68, 0.8, 0.9, 0.96];
-        while (spallStageRef.current < spallThresholds.length && progress >= spallThresholds[spallStageRef.current]) {
-          const stage = spallStageRef.current;
-          const chips = 3 + stage;
-          for (let i = 0; i < chips; i++) {
-            createEdgeSpall(progress);
-          }
-          spallStageRef.current += 1;
         }
 
         if (progress > 0.99) {
